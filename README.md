@@ -12,7 +12,7 @@ An iOS app for calculating and comparing bicycle gear ratios across road, mounta
 ### Gear Analysis
 - Calculates gear inches and development (meters per pedal stroke) for every chainring/cog combination
 - Highlights duplicate ratios across chainrings (within 1 gear inch)
-- Speed estimates at 70, 80, 90, and 100 rpm cadence
+- Speed estimates at 80, 90, and 100 rpm cadence
 - Interactive charts showing gear inches and speed curves (Road & MTB)
 
 ### Cassette Presets
