@@ -68,7 +68,7 @@ struct CalculatorView: View {
     }
 
     private var speedOptions: [Int] {
-        bikeType == .mtb ? [10, 11, 12] : [8, 9, 10, 11, 12]
+        bikeType == .mtb ? [10, 11, 12] : [8, 9, 10, 11, 12, 13]
     }
 
     // MARK: Body

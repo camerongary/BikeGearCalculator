@@ -353,6 +353,18 @@ extension CassettePreset {
                        cogs: [11,12,13,14,15,16,17,19,21,24,27,29]),
         CassettePreset(id: "campy_12_11_32", brand: "Campagnolo", range: "11-32", speeds: 12, forRoad: true, forMTB: false,
                        cogs: [11,12,13,14,15,17,19,21,24,27,30,32]),
+        // Campagnolo 13-speed (Super Record Wireless — road)
+        CassettePreset(id: "campy_13_11_29", brand: "Campagnolo", range: "11-29", speeds: 13, forRoad: true, forMTB: false,
+                       cogs: [11,12,13,14,15,16,17,19,21,23,25,27,29]),
+        CassettePreset(id: "campy_13_11_32", brand: "Campagnolo", range: "11-32", speeds: 13, forRoad: true, forMTB: false,
+                       cogs: [11,12,13,14,15,16,17,19,21,23,26,29,32]),
+        CassettePreset(id: "campy_13_11_34", brand: "Campagnolo", range: "11-34", speeds: 13, forRoad: true, forMTB: false,
+                       cogs: [11,12,13,14,15,16,17,19,21,24,27,30,34]),
+        // Campagnolo 13-speed (Ekar — gravel)
+        CassettePreset(id: "campy_ekar_9_36", brand: "Campagnolo Ekar", range: "9-36", speeds: 13, forRoad: true, forMTB: false,
+                       cogs: [9,10,11,12,13,14,16,18,20,22,25,29,36]),
+        CassettePreset(id: "campy_ekar_9_42", brand: "Campagnolo Ekar", range: "9-42", speeds: 13, forRoad: true, forMTB: false,
+                       cogs: [9,10,11,12,13,14,16,18,21,24,28,34,42]),
     ]
 
     // MARK: MTB
