@@ -82,11 +82,11 @@ struct CalculatorView: View {
                 gearingSection
                 riderSection
             }
-            .navigationTitle("Gear Calculator")
+            .navigationTitle("🚲 Cameron's Gear Calculator 🧮")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Gear Calculator")
+                    Text("🚲 Cameron's Gear Calculator 🧮")
                         .font(.title3.weight(.semibold))
                 }
             }
