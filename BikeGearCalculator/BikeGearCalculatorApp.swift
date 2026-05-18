@@ -1,17 +1,13 @@
-//
-//  BikeGearCalculatorApp.swift
-//  BikeGearCalculator
-//
-//  Created by Cameron Gary on 5/17/26.
-//
-
 import SwiftUI
 
 @main
 struct BikeGearCalculatorApp: App {
+    @StateObject private var store = GearStore()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(store)
         }
     }
 }

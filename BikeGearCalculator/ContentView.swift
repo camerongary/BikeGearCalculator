@@ -1,24 +1,21 @@
-//
-//  ContentView.swift
-//  BikeGearCalculator
-//
-//  Created by Cameron Gary on 5/17/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @EnvironmentObject var store: GearStore
 
-#Preview {
-    ContentView()
+    var body: some View {
+        TabView(selection: $store.selectedTab) {
+            CalculatorView()
+                .tag(0)
+                .tabItem { Label("Calculator", systemImage: "gearshape.2.fill") }
+
+            PresetsView()
+                .tag(1)
+                .tabItem { Label("Presets", systemImage: "list.bullet.rectangle") }
+
+            SavedView()
+                .tag(2)
+                .tabItem { Label("Saved", systemImage: "bookmark.fill") }
+        }
+    }
 }
