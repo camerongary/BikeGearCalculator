@@ -48,6 +48,7 @@ struct CalculatorView: View {
     @State private var combos: [GearCombo] = []
     @State private var navigationPath: [ResultsPayload] = []
     @State private var currentConfigID: UUID? = nil
+    @State private var showMethodsSheet = false
 
     // MARK: Derived
 
@@ -81,6 +82,7 @@ struct CalculatorView: View {
                 wheelSection
                 gearingSection
                 riderSection
+                methodsButton
             }
             .navigationTitle("🚲 Cameron's Gear Calculator 🧮")
             .navigationBarTitleDisplayMode(.inline)
@@ -108,6 +110,9 @@ struct CalculatorView: View {
                     bikeType: payload.bikeType,
                     onSave: { name in persistConfig(name: name) }
                 )
+            }
+            .sheet(isPresented: $showMethodsSheet) {
+                MethodsView()
             }
         }
     }
@@ -352,6 +357,20 @@ struct CalculatorView: View {
         }
     }
 
+    private var methodsButton: some View {
+        Section {
+            Button {
+                showMethodsSheet = true
+            } label: {
+                Label("How calculations work", systemImage: "function")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .font(.footnote)
+        }
+    }
+
     // MARK: - Logic
 
     private func buildCombos() -> [GearCombo] {
@@ -487,7 +506,9 @@ struct ResultsView: View {
                 .pickerStyle(.segmented)
             }
 
-            if bikeType != .fixed {
+            if bikeType == .fixed && combos.count == 2 {
+                FixedCompareChartSection(combos: combos, useKmh: useKmh)
+            } else if bikeType != .fixed {
                 GearChartSection(combos: combos, riderSettings: displaySettings)
             }
 
@@ -697,6 +718,129 @@ struct GearChartSection: View {
             .chartYAxisLabel(riderSettings.speedUnit)
             .chartLegend(position: .topLeading)
             .frame(height: 180)
+        }
+    }
+}
+
+// MARK: - Fixed Gear Comparison Chart
+
+struct FixedCompareChartSection: View {
+    let combos: [GearCombo]   // exactly 2
+    let useKmh: Bool
+
+    private var speedUnit: String { useKmh ? "km/h" : "mph" }
+
+    struct SpeedPoint: Identifiable {
+        let id = UUID()
+        let rpm: Double
+        let speed: Double
+        let setup: String
+    }
+
+    private var points: [SpeedPoint] {
+        let rpms = stride(from: 50.0, through: 130.0, by: 5.0)
+        return combos.enumerated().flatMap { idx, combo -> [SpeedPoint] in
+            let label = "Setup \(idx + 1): \(combo.chainring)×\(combo.cog)"
+            return rpms.map { rpm in
+                let spd = useKmh ? combo.speedKmh(rpm: rpm) : combo.speedMph(rpm: rpm)
+                return SpeedPoint(rpm: rpm, speed: spd, setup: label)
+            }
+        }
+    }
+
+    var body: some View {
+        Section("Speed Comparison") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Speed vs cadence (50–130 rpm)")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                Chart(points) { pt in
+                    LineMark(
+                        x: .value("RPM", pt.rpm),
+                        y: .value("Speed", pt.speed),
+                        series: .value("Setup", pt.setup)
+                    )
+                    .foregroundStyle(by: .value("Setup", pt.setup))
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.monotone)
+                }
+                .chartXAxisLabel("Cadence (rpm)")
+                .chartYAxisLabel(speedUnit)
+                .chartLegend(position: .topLeading)
+                .frame(height: 220)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+}
+
+// MARK: - Methods Sheet
+
+struct MethodsView: View {
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Gear Inches") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("gear_inches = (chainring ÷ cog) × wheel_diameter")
+                            .font(.system(.footnote, design: .monospaced))
+                        Text("Wheel diameter is the outside diameter of the inflated tyre in inches. Gear inches express how far the bike travels per pedal revolution, equivalent to the wheel diameter of a penny-farthing with the same mechanical advantage.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section("Speed") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("mph  =  rpm × gear_inches × π ÷ 1056")
+                            .font(.system(.footnote, design: .monospaced))
+                        Text("km/h  =  mph × 1.60934")
+                            .font(.system(.footnote, design: .monospaced))
+                        Text("Derived from: (gear inches × π) gives inches of travel per revolution. Multiply by RPM for inches per minute. Divide by (12 × 5280 ÷ 60) to convert to mph.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section("Development") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("m/rev  =  gear_inches × π ÷ 39.37")
+                            .font(.system(.footnote, design: .monospaced))
+                        Text("Distance travelled per pedal revolution in metres. Converts gear inches to metres using π (circumference factor) and the conversion 39.37 inches per metre.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section("Power (Watts)") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("P  =  (F_roll + F_drag) × v ÷ η")
+                            .font(.system(.footnote, design: .monospaced))
+                        Text("F_roll  =  Crr × m × g")
+                            .font(.system(.footnote, design: .monospaced))
+                        Text("F_drag  =  0.5 × CdA × ρ × v²")
+                            .font(.system(.footnote, design: .monospaced))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Crr — rolling resistance (road: 0.004, MTB: 0.010)")
+                            Text("m — rider mass (kg)")
+                            Text("g — 9.81 m/s²")
+                            Text("CdA — drag area in m² (drops: 0.30, hoods: 0.38, upright: 0.55)")
+                            Text("ρ — air density 1.225 kg/m³ (sea level, 15 °C)")
+                            Text("v — speed in m/s")
+                            Text("η — drivetrain efficiency (fixed: 0.99, geared: 0.97)")
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section("Notes") {
+                    Text("Power estimates assume flat ground with no wind and standard air density at sea level. They are useful for comparing gears relative to each other, not as absolute power targets.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("How It's Calculated")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
