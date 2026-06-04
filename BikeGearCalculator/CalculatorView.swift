@@ -246,7 +246,7 @@ struct CalculatorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Picker("Chainring", selection: chainring) {
-                    ForEach(26...60, id: \.self) { t in Text("\(t)t").tag(t) }
+                    ForEach(26...62, id: \.self) { t in Text("\(t)t").tag(t) }
                 }
                 .pickerStyle(.wheel)
                 .frame(height: 130)
