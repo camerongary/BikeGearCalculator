@@ -590,7 +590,7 @@ struct GearComboRow: View {
                     .font(.headline)
                     .monospacedDigit()
                 Text(String(format: "%.2f\"  ·  ratio %.2f", combo.gearInches, combo.ratio))
-                    .font(.caption)
+                    .font(.headline)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Spacer()
@@ -854,13 +854,13 @@ struct CadenceCell: View {
     var body: some View {
         VStack(alignment: .center, spacing: 2) {
             Text("\(Int(rpm))")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.tertiary)
             Text(String(format: "%.1f %@", speed, speedUnit))
-                .font(.caption)
+                .font(.footnote)
                 .monospacedDigit()
             Text(String(format: "%.0fW", watts))
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
