@@ -25,6 +25,8 @@ private struct ResultsPayload: Hashable {
 private struct FinderPayload: Hashable {
     let id = UUID()
     let suggestions: [GearSuggestion]
+    let ownedSuggestions: [GearSuggestion]
+    let ownedGears: OwnedGears
     let targetSpeed: Double        // in the unit the user entered
     let cadence: Double
     let useKmh: Bool
@@ -71,6 +73,10 @@ struct CalculatorView: View {
     @State private var calcMode: CalcMode = .findSpeed
     @State private var targetSpeed: Double = 30.0   // in the user's speed unit
     @State private var targetCadence: Double = 90
+
+    // Owned fixed gear parts
+    @State private var ownedGears = OwnedGears()
+    @State private var showGearLibrary = false
 
     // MARK: Derived
 
@@ -122,9 +128,13 @@ struct CalculatorView: View {
             }
             .onAppear {
                 riderSettings = store.loadRiderSettings()
+                ownedGears = store.loadOwnedGears()
             }
             .onChange(of: riderSettings) { _, settings in
                 store.saveRiderSettings(settings)
+            }
+            .onChange(of: ownedGears) { _, gears in
+                store.saveOwnedGears(gears)
             }
             .onChange(of: store.pendingLoad) { _, load in
                 guard let load else { return }
@@ -142,6 +152,8 @@ struct CalculatorView: View {
             .navigationDestination(for: FinderPayload.self) { payload in
                 GearFinderResultsView(
                     suggestions: payload.suggestions,
+                    ownedSuggestions: payload.ownedSuggestions,
+                    ownedGears: payload.ownedGears,
                     targetSpeed: payload.targetSpeed,
                     cadence: payload.cadence,
                     useKmh: payload.useKmh,
@@ -150,6 +162,9 @@ struct CalculatorView: View {
             }
             .sheet(isPresented: $showMethodsSheet) {
                 MethodsView()
+            }
+            .sheet(isPresented: $showGearLibrary) {
+                GearLibraryView(owned: $ownedGears)
             }
         }
     }
@@ -190,7 +205,29 @@ struct CalculatorView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
+
+            gearLibraryButton
         }
+    }
+
+    private var gearLibraryButton: some View {
+        Button {
+            showGearLibrary = true
+        } label: {
+            HStack {
+                Label("My Gear Library", systemImage: "wrench.and.screwdriver")
+                Spacer()
+                Text(ownedGears.isEmpty
+                     ? "Empty"
+                     : "\(ownedGears.chainrings.count) rings · \(ownedGears.cogs.count) cogs")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var targetSpeedMph: Double {
@@ -239,6 +276,8 @@ struct CalculatorView: View {
                         cog: $fixedCog2
                     )
                 }
+
+                gearLibraryButton
             }
         } else {
             Section("Chainrings") {
@@ -426,9 +465,17 @@ struct CalculatorView: View {
                         rpm: targetCadence,
                         wheelDiameter: wheelSize.diameterInches
                     )
+                    let owned = GearCalculator.bestOwnedCombos(
+                        targetMph: targetSpeedMph,
+                        rpm: targetCadence,
+                        wheelDiameter: wheelSize.diameterInches,
+                        owned: ownedGears
+                    )
                     if !suggestions.isEmpty {
                         navigationPath.append(FinderPayload(
                             suggestions: suggestions,
+                            ownedSuggestions: owned,
+                            ownedGears: ownedGears,
                             targetSpeed: targetSpeed,
                             cadence: targetCadence,
                             useKmh: riderSettings.useKmh,
@@ -676,6 +723,8 @@ struct ResultsView: View {
 
 struct GearFinderResultsView: View {
     let suggestions: [GearSuggestion]
+    let ownedSuggestions: [GearSuggestion]
+    let ownedGears: OwnedGears
     let targetSpeed: Double
     let cadence: Double
     let useKmh: Bool
@@ -683,9 +732,12 @@ struct GearFinderResultsView: View {
 
     @State private var displayKmh: Bool
 
-    init(suggestions: [GearSuggestion], targetSpeed: Double, cadence: Double,
+    init(suggestions: [GearSuggestion], ownedSuggestions: [GearSuggestion],
+         ownedGears: OwnedGears, targetSpeed: Double, cadence: Double,
          useKmh: Bool, requiredInches: Double) {
         self.suggestions = suggestions
+        self.ownedSuggestions = ownedSuggestions
+        self.ownedGears = ownedGears
         self.targetSpeed = targetSpeed
         self.cadence = cadence
         self.useKmh = useKmh
@@ -729,13 +781,36 @@ struct GearFinderResultsView: View {
                 .padding(.vertical, 8)
             }
 
+            if !ownedGears.isEmpty {
+                Section {
+                    if ownedSuggestions.isEmpty {
+                        Text("Add both chainrings and cogs to your library to see buildable combos.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(ownedSuggestions) { s in
+                            GearSuggestionRow(
+                                suggestion: s,
+                                achievedSpeed: achievedSpeed(s),
+                                targetSpeed: targetSpeedInDisplayUnit,
+                                speedUnit: displayUnit,
+                                ownedGears: nil   // no badge; whole section is owned
+                            )
+                        }
+                    }
+                } header: {
+                    Label("From your gears", systemImage: "wrench.and.screwdriver")
+                }
+            }
+
             Section {
                 ForEach(suggestions) { s in
                     GearSuggestionRow(
                         suggestion: s,
                         achievedSpeed: achievedSpeed(s),
                         targetSpeed: targetSpeedInDisplayUnit,
-                        speedUnit: displayUnit
+                        speedUnit: displayUnit,
+                        ownedGears: ownedGears.isEmpty ? nil : ownedGears
                     )
                 }
             } header: {
@@ -753,9 +828,26 @@ struct GearSuggestionRow: View {
     let achievedSpeed: Double
     let targetSpeed: Double
     let speedUnit: String
+    var ownedGears: OwnedGears? = nil   // non-nil → show ownership badge
 
     private var speedError: Double { achievedSpeed - targetSpeed }
     private var isClose: Bool { abs(speedError) <= 0.5 }
+
+    private var ownershipBadge: (text: String, color: Color, icon: String)? {
+        guard let owned = ownedGears else { return nil }
+        let hasRing = owned.ownsChainring(suggestion.chainring)
+        let hasCog = owned.ownsCog(suggestion.cog)
+        switch (hasRing, hasCog) {
+        case (true, true):
+            return ("Owned", .green, "checkmark.circle.fill")
+        case (true, false):
+            return ("Need \(suggestion.cog)t cog", .orange, "cart")
+        case (false, true):
+            return ("Need \(suggestion.chainring)t ring", .orange, "cart")
+        case (false, false):
+            return ("Need ring + cog", .secondary, "cart")
+        }
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -769,6 +861,11 @@ struct GearSuggestionRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                if let badge = ownershipBadge {
+                    Label(badge.text, systemImage: badge.icon)
+                        .font(.caption2)
+                        .foregroundStyle(badge.color)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
@@ -780,6 +877,80 @@ struct GearSuggestionRow: View {
                     .font(.caption)
                     .foregroundStyle(isClose ? .green : .secondary)
                     .monospacedDigit()
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Gear Library Editor
+
+struct GearLibraryView: View {
+    @Binding var owned: OwnedGears
+    @Environment(\.dismiss) private var dismiss
+
+    private let ringRange = Array(26...62)
+    private let cogRange = Array(12...24)
+    private let columns = [GridItem(.adaptive(minimum: 52), spacing: 8)]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Mark the chainrings and cogs you own. Gear Finder results will show which suggestions you can build.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Chainrings (\(owned.chainrings.count))") {
+                    toothGrid(teeth: ringRange, selection: $owned.chainrings)
+                }
+
+                Section("Cogs (\(owned.cogs.count))") {
+                    toothGrid(teeth: cogRange, selection: $owned.cogs)
+                }
+
+                if !owned.isEmpty {
+                    Section {
+                        Button("Clear all", role: .destructive) {
+                            owned = OwnedGears()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .navigationTitle("My Gear Library")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func toothGrid(teeth: [Int], selection: Binding<[Int]>) -> some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(teeth, id: \.self) { t in
+                let isSelected = selection.wrappedValue.contains(t)
+                Button {
+                    if isSelected {
+                        selection.wrappedValue.removeAll { $0 == t }
+                    } else {
+                        selection.wrappedValue.append(t)
+                        selection.wrappedValue.sort()
+                    }
+                } label: {
+                    Text("\(t)t")
+                        .font(.callout.weight(isSelected ? .semibold : .regular))
+                        .monospacedDigit()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(isSelected ? Color.accentColor : Color(.secondarySystemFill),
+                                    in: RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(isSelected ? .white : .primary)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.vertical, 4)

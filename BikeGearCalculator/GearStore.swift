@@ -18,8 +18,23 @@ class GearStore: ObservableObject {
 
     private let savedKey = "savedConfigs_v1"
     private let riderKey = "riderSettings_v1"
+    private let ownedKey = "ownedGears_v1"
 
     init() { load() }
+
+    // MARK: - Owned gears persistence
+
+    func saveOwnedGears(_ gears: OwnedGears) {
+        guard let data = try? JSONEncoder().encode(gears) else { return }
+        UserDefaults.standard.set(data, forKey: ownedKey)
+    }
+
+    func loadOwnedGears() -> OwnedGears {
+        guard let data = UserDefaults.standard.data(forKey: ownedKey),
+              let gears = try? JSONDecoder().decode(OwnedGears.self, from: data)
+        else { return OwnedGears() }
+        return gears
+    }
 
     // MARK: - Rider settings persistence
 

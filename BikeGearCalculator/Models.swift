@@ -123,6 +123,18 @@ struct RiderSettings: Codable, Equatable {
     var speedUnit: String  { useKmh ? "km/h" : "mph" }
 }
 
+// MARK: - Owned Gears
+
+// Fixed gear parts the rider owns; used to annotate Gear Finder results.
+struct OwnedGears: Codable, Equatable {
+    var chainrings: [Int] = []
+    var cogs: [Int] = []
+
+    var isEmpty: Bool { chainrings.isEmpty && cogs.isEmpty }
+    func ownsChainring(_ t: Int) -> Bool { chainrings.contains(t) }
+    func ownsCog(_ t: Int) -> Bool { cogs.contains(t) }
+}
+
 // MARK: - Saved Config
 
 struct SavedConfig: Identifiable, Codable {

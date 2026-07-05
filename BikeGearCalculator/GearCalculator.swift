@@ -84,6 +84,36 @@ enum GearCalculator {
             .map { $0 }
     }
 
+    // Best combos buildable from the rider's owned parts, closest to target first.
+    static func bestOwnedCombos(
+        targetMph: Double,
+        rpm: Double,
+        wheelDiameter: Double,
+        owned: OwnedGears,
+        maxResults: Int = 3
+    ) -> [GearSuggestion] {
+        let target = requiredGearInches(targetMph: targetMph, rpm: rpm)
+        guard target > 0, !owned.chainrings.isEmpty, !owned.cogs.isEmpty else { return [] }
+
+        var suggestions: [GearSuggestion] = []
+        for ring in owned.chainrings {
+            for cog in owned.cogs {
+                let gi = (Double(ring) / Double(cog)) * wheelDiameter
+                suggestions.append(GearSuggestion(
+                    chainring: ring,
+                    cog: cog,
+                    gearInches: gi,
+                    achievedSpeedMph: rpm * gi * .pi / 1056.0,
+                    errorInches: gi - target
+                ))
+            }
+        }
+        return suggestions
+            .sorted { abs($0.errorInches) < abs($1.errorInches) }
+            .prefix(maxResults)
+            .map { $0 }
+    }
+
     private static func gcd(_ a: Int, _ b: Int) -> Int {
         var (a, b) = (a, b)
         while b != 0 { (a, b) = (b, a % b) }

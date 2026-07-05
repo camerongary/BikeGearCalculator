@@ -383,3 +383,54 @@ final class GearFinderTests: XCTestCase {
         XCTAssertEqual(results.count, 5)
     }
 }
+
+final class OwnedGearsTests: XCTestCase {
+
+    func testBestOwnedCombosOnlyUsesOwnedParts() {
+        let owned = OwnedGears(chainrings: [46, 48], cogs: [16, 18])
+        let results = GearCalculator.bestOwnedCombos(targetMph: 20, rpm: 90,
+                                                     wheelDiameter: 27.0, owned: owned)
+        XCTAssertFalse(results.isEmpty)
+        for s in results {
+            XCTAssertTrue(owned.chainrings.contains(s.chainring))
+            XCTAssertTrue(owned.cogs.contains(s.cog))
+        }
+    }
+
+    func testBestOwnedCombosSortedByError() {
+        let owned = OwnedGears(chainrings: [42, 46, 48, 50], cogs: [14, 16, 18])
+        let results = GearCalculator.bestOwnedCombos(targetMph: 20, rpm: 90,
+                                                     wheelDiameter: 27.0, owned: owned,
+                                                     maxResults: 12)
+        for i in 1..<results.count {
+            XCTAssertLessThanOrEqual(abs(results[i-1].errorInches), abs(results[i].errorInches))
+        }
+    }
+
+    func testBestOwnedCombosEmptyWhenMissingEitherPart() {
+        let ringsOnly = OwnedGears(chainrings: [48], cogs: [])
+        let cogsOnly  = OwnedGears(chainrings: [], cogs: [16])
+        XCTAssertTrue(GearCalculator.bestOwnedCombos(targetMph: 20, rpm: 90,
+                                                     wheelDiameter: 27.0, owned: ringsOnly).isEmpty)
+        XCTAssertTrue(GearCalculator.bestOwnedCombos(targetMph: 20, rpm: 90,
+                                                     wheelDiameter: 27.0, owned: cogsOnly).isEmpty)
+    }
+
+    func testBestOwnedCombosMaxResults() {
+        let owned = OwnedGears(chainrings: [42, 46, 48], cogs: [14, 16, 18])
+        let results = GearCalculator.bestOwnedCombos(targetMph: 20, rpm: 90,
+                                                     wheelDiameter: 27.0, owned: owned,
+                                                     maxResults: 3)
+        XCTAssertEqual(results.count, 3)
+    }
+
+    func testOwnedGearsMembership() {
+        let owned = OwnedGears(chainrings: [48], cogs: [16, 18])
+        XCTAssertTrue(owned.ownsChainring(48))
+        XCTAssertFalse(owned.ownsChainring(50))
+        XCTAssertTrue(owned.ownsCog(16))
+        XCTAssertFalse(owned.ownsCog(15))
+        XCTAssertFalse(owned.isEmpty)
+        XCTAssertTrue(OwnedGears().isEmpty)
+    }
+}
