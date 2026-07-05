@@ -15,14 +15,17 @@ An iOS app for calculating and comparing bicycle gear ratios across road, mounta
 - Speed estimates at 80, 90, and 100 rpm cadence
 - Interactive charts showing gear inches and speed curves (Road & MTB)
 
+### Gear Finder
+Work backwards from a goal: pick a target speed and cadence, and the app computes the required gear inches and suggests the ten closest chainring/cog combinations, with each suggestion's actual speed and error shown.
+
 ### Cassette Presets
-37 presets covering common groupsets:
+42 presets covering common groupsets:
 
 | Brand | Speeds | Series |
 |---|---|---|
 | Shimano | 8–12sp | Road (Claris → Dura-Ace) + MTB (Deore, SLX, XT, XTR) |
 | SRAM | 10–12sp | Road (Rival, Force, Red) + MTB (NX, GX, X01, XX1 Eagle) |
-| Campagnolo | 11–12sp | Veloce, Chorus, Record, Super Record |
+| Campagnolo | 11–13sp | Veloce, Chorus, Record, Super Record Wireless, Ekar |
 
 ### Units & Settings
 - Imperial (inches, lbs, mph) and metric (cm, kg, km/h) — toggle on the results screen

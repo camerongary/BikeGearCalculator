@@ -21,6 +21,24 @@ private struct ResultsPayload: Hashable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
 }
 
+// Same pattern for the gear finder (Find Gear mode).
+private struct FinderPayload: Hashable {
+    let id = UUID()
+    let suggestions: [GearSuggestion]
+    let targetSpeed: Double        // in the unit the user entered
+    let cadence: Double
+    let useKmh: Bool
+    let requiredInches: Double
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
+enum CalcMode: String, CaseIterable, Identifiable {
+    case findSpeed = "Find Speed"
+    case findGear = "Find Gear"
+    var id: String { rawValue }
+}
+
 // MARK: - Calculator (inputs)
 
 struct CalculatorView: View {
@@ -45,10 +63,14 @@ struct CalculatorView: View {
     @State private var fixedCog2: Int = 16
 
     @State private var riderSettings = RiderSettings()
-    @State private var combos: [GearCombo] = []
-    @State private var navigationPath: [ResultsPayload] = []
+    @State private var navigationPath = NavigationPath()
     @State private var currentConfigID: UUID? = nil
     @State private var showMethodsSheet = false
+
+    // Gear finder (Find Gear mode)
+    @State private var calcMode: CalcMode = .findSpeed
+    @State private var targetSpeed: Double = 30.0   // in the user's speed unit
+    @State private var targetCadence: Double = 90
 
     // MARK: Derived
 
@@ -78,10 +100,16 @@ struct CalculatorView: View {
         NavigationStack(path: $navigationPath) {
             Form {
                 calculateButton
-                bikeTypeSection
-                wheelSection
-                gearingSection
-                riderSection
+                modeSection
+                if calcMode == .findSpeed {
+                    bikeTypeSection
+                    wheelSection
+                    gearingSection
+                    riderSection
+                } else {
+                    wheelSection
+                    finderSection
+                }
                 methodsButton
             }
             .navigationTitle("🚲 Cameron's Gear Calculator 🧮")
@@ -111,6 +139,15 @@ struct CalculatorView: View {
                     onSave: { name in persistConfig(name: name) }
                 )
             }
+            .navigationDestination(for: FinderPayload.self) { payload in
+                GearFinderResultsView(
+                    suggestions: payload.suggestions,
+                    targetSpeed: payload.targetSpeed,
+                    cadence: payload.cadence,
+                    useKmh: payload.useKmh,
+                    requiredInches: payload.requiredInches
+                )
+            }
             .sheet(isPresented: $showMethodsSheet) {
                 MethodsView()
             }
@@ -118,6 +155,51 @@ struct CalculatorView: View {
     }
 
     // MARK: - Sections
+
+    private var modeSection: some View {
+        Section {
+            Picker("Mode", selection: $calcMode) {
+                ForEach(CalcMode.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private var finderSection: some View {
+        Section("Target") {
+            HStack {
+                Text("Speed")
+                Spacer()
+                Stepper(
+                    String(format: "%.1f %@", targetSpeed, riderSettings.speedUnit),
+                    value: $targetSpeed, in: 5...80, step: 0.5
+                )
+            }
+
+            HStack {
+                Text("Cadence")
+                Spacer()
+                Stepper("\(Int(targetCadence)) rpm", value: $targetCadence, in: 40...140, step: 5)
+            }
+
+            Toggle(isOn: $riderSettings.useKmh) {
+                Text("Speed in km/h")
+            }
+
+            Text(String(format: "Requires %.1f\" gear inches", requiredInchesForTarget))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var targetSpeedMph: Double {
+        riderSettings.useKmh ? targetSpeed / 1.60934 : targetSpeed
+    }
+
+    private var requiredInchesForTarget: Double {
+        GearCalculator.requiredGearInches(targetMph: targetSpeedMph, rpm: targetCadence)
+    }
 
     private var bikeTypeSection: some View {
         Section("Bike Type") {
@@ -338,14 +420,30 @@ struct CalculatorView: View {
     private var calculateButton: some View {
         Section {
             Button {
-                let result = buildCombos()
-                combos = result  // kept for persistConfig
-                if !result.isEmpty {
-                    navigationPath.append(ResultsPayload(
-                        combos: result,
-                        riderSettings: riderSettings,
-                        bikeType: bikeType
-                    ))
+                if calcMode == .findGear {
+                    let suggestions = GearCalculator.findGears(
+                        targetMph: targetSpeedMph,
+                        rpm: targetCadence,
+                        wheelDiameter: wheelSize.diameterInches
+                    )
+                    if !suggestions.isEmpty {
+                        navigationPath.append(FinderPayload(
+                            suggestions: suggestions,
+                            targetSpeed: targetSpeed,
+                            cadence: targetCadence,
+                            useKmh: riderSettings.useKmh,
+                            requiredInches: requiredInchesForTarget
+                        ))
+                    }
+                } else {
+                    let result = buildCombos()
+                    if !result.isEmpty {
+                        navigationPath.append(ResultsPayload(
+                            combos: result,
+                            riderSettings: riderSettings,
+                            bikeType: bikeType
+                        ))
+                    }
                 }
             } label: {
                 Label("Calculate", systemImage: "function")
@@ -353,7 +451,7 @@ struct CalculatorView: View {
                     .fontWeight(.semibold)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(chainrings.isEmpty || cogs.isEmpty)
+            .disabled(calcMode == .findSpeed && (chainrings.isEmpty || cogs.isEmpty))
         }
     }
 
@@ -423,10 +521,11 @@ struct CalculatorView: View {
         }
         if load.restoreRiderSettings { riderSettings = c.riderSettings }
         currentConfigID = load.restoreRiderSettings ? c.id : nil
+        calcMode = .findSpeed
         let result = buildCombos()
-        combos = result
         if !result.isEmpty {
-            navigationPath = [ResultsPayload(combos: result, riderSettings: riderSettings, bikeType: bikeType)]
+            navigationPath = NavigationPath()
+            navigationPath.append(ResultsPayload(combos: result, riderSettings: riderSettings, bikeType: bikeType))
         }
     }
 
@@ -450,9 +549,8 @@ struct CalculatorView: View {
             fixedCompareEnabled = false
             wheelSize = WheelSize.catalog.first { $0.name == "700c × 25mm" } ?? WheelSize.catalog[1]
         }
-        combos = []
         currentConfigID = nil
-        navigationPath.removeAll()
+        navigationPath = NavigationPath()
     }
 
     private func parseInts(_ text: String) -> [Int] {
@@ -571,6 +669,120 @@ struct ResultsView: View {
             }
             .presentationDetents([.medium])
         }
+    }
+}
+
+// MARK: - Gear Finder Results
+
+struct GearFinderResultsView: View {
+    let suggestions: [GearSuggestion]
+    let targetSpeed: Double
+    let cadence: Double
+    let useKmh: Bool
+    let requiredInches: Double
+
+    @State private var displayKmh: Bool
+
+    init(suggestions: [GearSuggestion], targetSpeed: Double, cadence: Double,
+         useKmh: Bool, requiredInches: Double) {
+        self.suggestions = suggestions
+        self.targetSpeed = targetSpeed
+        self.cadence = cadence
+        self.useKmh = useKmh
+        self.requiredInches = requiredInches
+        self._displayKmh = State(initialValue: useKmh)
+    }
+
+    private var displayUnit: String { displayKmh ? "km/h" : "mph" }
+
+    private var targetSpeedInDisplayUnit: Double {
+        // targetSpeed was entered in the unit indicated by useKmh
+        let mph = useKmh ? targetSpeed / 1.60934 : targetSpeed
+        return displayKmh ? mph * 1.60934 : mph
+    }
+
+    private func achievedSpeed(_ s: GearSuggestion) -> Double {
+        displayKmh ? s.achievedSpeedMph * 1.60934 : s.achievedSpeedMph
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Picker("Units", selection: $displayKmh) {
+                    Text("km/h").tag(true)
+                    Text("mph").tag(false)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section {
+                VStack(spacing: 6) {
+                    Text(String(format: "%.1f\"", requiredInches))
+                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                        .monospacedDigit()
+                    Text(String(format: "gear inches needed for %.1f %@ at %.0f rpm",
+                                targetSpeedInDisplayUnit, displayUnit, cadence))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+
+            Section {
+                ForEach(suggestions) { s in
+                    GearSuggestionRow(
+                        suggestion: s,
+                        achievedSpeed: achievedSpeed(s),
+                        targetSpeed: targetSpeedInDisplayUnit,
+                        speedUnit: displayUnit
+                    )
+                }
+            } header: {
+                Text("Closest gears")
+            }
+        }
+        .contentMargins(.bottom, 90, for: .scrollContent)
+        .navigationTitle("Gear Finder")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct GearSuggestionRow: View {
+    let suggestion: GearSuggestion
+    let achievedSpeed: Double
+    let targetSpeed: Double
+    let speedUnit: String
+
+    private var speedError: Double { achievedSpeed - targetSpeed }
+    private var isClose: Bool { abs(speedError) <= 0.5 }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(suggestion.chainring)×\(suggestion.cog)")
+                    .font(.headline)
+                    .monospacedDigit()
+                Text(String(format: "%.1f\"  ·  ratio %.2f",
+                            suggestion.gearInches,
+                            Double(suggestion.chainring) / Double(suggestion.cog)))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(String(format: "%.1f %@", achievedSpeed, speedUnit))
+                    .font(.footnote)
+                    .monospacedDigit()
+                Text(String(format: "%@%.1f %@",
+                            speedError >= 0 ? "+" : "−", abs(speedError), speedUnit))
+                    .font(.caption)
+                    .foregroundStyle(isClose ? .green : .secondary)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

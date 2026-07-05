@@ -320,3 +320,66 @@ final class PresetsTests: XCTestCase {
         XCTAssertEqual(config.bikeType, preset.bikeType)
     }
 }
+
+final class GearFinderTests: XCTestCase {
+
+    // requiredGearInches is the exact inverse of speedMph
+    func testRequiredGearInchesRoundTrip() {
+        let combo = GearCombo(chainring: 48, cog: 16, wheelDiameter: 27.0) // 81.0"
+        let speed = combo.speedMph(rpm: 90)
+        let required = GearCalculator.requiredGearInches(targetMph: speed, rpm: 90)
+        XCTAssertEqual(required, combo.gearInches, accuracy: 0.0001)
+    }
+
+    func testRequiredGearInchesZeroRPM() {
+        XCTAssertEqual(GearCalculator.requiredGearInches(targetMph: 20, rpm: 0), 0)
+    }
+
+    func testFindGearsSortedByError() {
+        let results = GearCalculator.findGears(targetMph: 20, rpm: 90, wheelDiameter: 27.0)
+        XCTAssertFalse(results.isEmpty)
+        for i in 1..<results.count {
+            XCTAssertLessThanOrEqual(abs(results[i-1].errorInches), abs(results[i].errorInches))
+        }
+    }
+
+    func testFindGearsRespectsRanges() {
+        let results = GearCalculator.findGears(targetMph: 20, rpm: 90, wheelDiameter: 27.0)
+        for s in results {
+            XCTAssertTrue((24...62).contains(s.chainring))
+            XCTAssertTrue((9...36).contains(s.cog))
+        }
+    }
+
+    func testFindGearsDedupesEquivalentRatios() {
+        let results = GearCalculator.findGears(targetMph: 20, rpm: 90, wheelDiameter: 27.0,
+                                               maxResults: 100)
+        var seen = Set<String>()
+        for s in results {
+            func gcd(_ a: Int, _ b: Int) -> Int { b == 0 ? a : gcd(b, a % b) }
+            let d = gcd(s.chainring, s.cog)
+            let key = "\(s.chainring / d)/\(s.cog / d)"
+            XCTAssertFalse(seen.contains(key), "duplicate ratio \(key)")
+            seen.insert(key)
+        }
+    }
+
+    func testFindGearsTopResultMatchesHandMath() {
+        // 30 km/h = 18.641 mph @ 90 rpm on 27.0" wheel
+        // required GI = 18.641 × 1056 / (90 × π) ≈ 69.6"
+        let mph = 30.0 / 1.60934
+        let results = GearCalculator.findGears(targetMph: mph, rpm: 90, wheelDiameter: 27.0)
+        let required = GearCalculator.requiredGearInches(targetMph: mph, rpm: 90)
+        XCTAssertEqual(required, 69.6, accuracy: 0.1)
+        // Top result should be within half a gear inch of the target
+        XCTAssertLessThanOrEqual(abs(results[0].errorInches), 0.5)
+        // And its achieved speed should round-trip to ~30 km/h
+        XCTAssertEqual(results[0].achievedSpeedMph * 1.60934, 30.0, accuracy: 0.5)
+    }
+
+    func testFindGearsMaxResults() {
+        let results = GearCalculator.findGears(targetMph: 20, rpm: 90, wheelDiameter: 27.0,
+                                               maxResults: 5)
+        XCTAssertEqual(results.count, 5)
+    }
+}

@@ -1,5 +1,14 @@
 import Foundation
 
+struct GearSuggestion: Identifiable, Hashable {
+    let id = UUID()
+    let chainring: Int
+    let cog: Int
+    let gearInches: Double
+    let achievedSpeedMph: Double   // at the target cadence
+    let errorInches: Double        // signed: positive = taller than target
+}
+
 enum GearCalculator {
 
     static func computeCombos(
@@ -29,6 +38,56 @@ enum GearCalculator {
             c2.isDuplicate = true; c2.duplicateGroup = 1
         }
         return [c1, c2]
+    }
+
+    // Inverse of GearCombo.speedMph: the gear inches needed to hit a speed at a cadence.
+    static func requiredGearInches(targetMph: Double, rpm: Double) -> Double {
+        guard rpm > 0 else { return 0 }
+        return targetMph * 1056.0 / (rpm * .pi)
+    }
+
+    // Suggest chainring/cog combos that best hit a target speed at a cadence.
+    // Equivalent ratios (48×16 vs 51×17) are deduped, keeping the fewest total teeth.
+    static func findGears(
+        targetMph: Double,
+        rpm: Double,
+        wheelDiameter: Double,
+        chainringRange: ClosedRange<Int> = 24...62,
+        cogRange: ClosedRange<Int> = 9...36,
+        maxResults: Int = 10
+    ) -> [GearSuggestion] {
+        let target = requiredGearInches(targetMph: targetMph, rpm: rpm)
+        guard target > 0 else { return [] }
+
+        // reduced ratio → best combo for that ratio
+        var best: [String: GearSuggestion] = [:]
+        for ring in chainringRange {
+            for cog in cogRange {
+                let d = gcd(ring, cog)
+                let key = "\(ring / d)/\(cog / d)"
+                if let existing = best[key], existing.chainring + existing.cog <= ring + cog {
+                    continue
+                }
+                let gi = (Double(ring) / Double(cog)) * wheelDiameter
+                best[key] = GearSuggestion(
+                    chainring: ring,
+                    cog: cog,
+                    gearInches: gi,
+                    achievedSpeedMph: rpm * gi * .pi / 1056.0,
+                    errorInches: gi - target
+                )
+            }
+        }
+        return best.values
+            .sorted { abs($0.errorInches) < abs($1.errorInches) }
+            .prefix(maxResults)
+            .map { $0 }
+    }
+
+    private static func gcd(_ a: Int, _ b: Int) -> Int {
+        var (a, b) = (a, b)
+        while b != 0 { (a, b) = (b, a % b) }
+        return a
     }
 
     // Within 1 gear inch of each other — only flag cross-chainring pairs so single-ring
