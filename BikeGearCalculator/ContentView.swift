@@ -16,6 +16,10 @@ struct ContentView: View {
             SavedView()
                 .tag(2)
                 .tabItem { Label("Saved", systemImage: "bookmark.fill") }
+
+            MyGearsView()
+                .tag(3)
+                .tabItem { Label("My Gears", systemImage: "wrench.and.screwdriver.fill") }
         }
     }
 }

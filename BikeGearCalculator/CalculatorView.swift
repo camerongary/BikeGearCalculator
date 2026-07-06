@@ -74,9 +74,6 @@ struct CalculatorView: View {
     @State private var targetSpeed: Double = 30.0   // in the user's speed unit
     @State private var targetCadence: Double = 90
 
-    // Owned fixed gear parts
-    @State private var ownedGears = OwnedGears()
-    @State private var showGearLibrary = false
 
     // MARK: Derived
 
@@ -128,13 +125,9 @@ struct CalculatorView: View {
             }
             .onAppear {
                 riderSettings = store.loadRiderSettings()
-                ownedGears = store.loadOwnedGears()
             }
             .onChange(of: riderSettings) { _, settings in
                 store.saveRiderSettings(settings)
-            }
-            .onChange(of: ownedGears) { _, gears in
-                store.saveOwnedGears(gears)
             }
             .onChange(of: store.pendingLoad) { _, load in
                 guard let load else { return }
@@ -162,9 +155,6 @@ struct CalculatorView: View {
             }
             .sheet(isPresented: $showMethodsSheet) {
                 MethodsView()
-            }
-            .sheet(isPresented: $showGearLibrary) {
-                GearLibraryView(owned: $ownedGears)
             }
         }
     }
@@ -205,29 +195,7 @@ struct CalculatorView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
-
-            gearLibraryButton
         }
-    }
-
-    private var gearLibraryButton: some View {
-        Button {
-            showGearLibrary = true
-        } label: {
-            HStack {
-                Label("My Gear Library", systemImage: "wrench.and.screwdriver")
-                Spacer()
-                Text(ownedGears.isEmpty
-                     ? "Empty"
-                     : "\(ownedGears.chainrings.count) rings · \(ownedGears.cogs.count) cogs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     private var targetSpeedMph: Double {
@@ -276,8 +244,6 @@ struct CalculatorView: View {
                         cog: $fixedCog2
                     )
                 }
-
-                gearLibraryButton
             }
         } else {
             Section("Chainrings") {
@@ -469,13 +435,13 @@ struct CalculatorView: View {
                         targetMph: targetSpeedMph,
                         rpm: targetCadence,
                         wheelDiameter: wheelSize.diameterInches,
-                        owned: ownedGears
+                        owned: store.ownedGears
                     )
                     if !suggestions.isEmpty {
                         navigationPath.append(FinderPayload(
                             suggestions: suggestions,
                             ownedSuggestions: owned,
-                            ownedGears: ownedGears,
+                            ownedGears: store.ownedGears,
                             targetSpeed: targetSpeed,
                             cadence: targetCadence,
                             useKmh: riderSettings.useKmh,
@@ -783,23 +749,17 @@ struct GearFinderResultsView: View {
 
             if !ownedGears.isEmpty {
                 Section {
-                    if ownedSuggestions.isEmpty {
-                        Text("Add both chainrings and cogs to your library to see buildable combos.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(ownedSuggestions) { s in
-                            GearSuggestionRow(
-                                suggestion: s,
-                                achievedSpeed: achievedSpeed(s),
-                                targetSpeed: targetSpeedInDisplayUnit,
-                                speedUnit: displayUnit,
-                                ownedGears: nil   // no badge; whole section is owned
-                            )
-                        }
+                    NavigationLink {
+                        OwnedGearsComparisonView(
+                            ownedSuggestions: ownedSuggestions,
+                            targetSpeed: targetSpeedInDisplayUnit,
+                            cadence: cadence,
+                            displayKmh: displayKmh,
+                            requiredInches: requiredInches
+                        )
+                    } label: {
+                        Label("From your gears", systemImage: "wrench.and.screwdriver")
                     }
-                } header: {
-                    Label("From your gears", systemImage: "wrench.and.screwdriver")
                 }
             }
 
@@ -883,15 +843,77 @@ struct GearSuggestionRow: View {
     }
 }
 
-// MARK: - Gear Library Editor
+// MARK: - Owned Gears Comparison (from Gear Finder results)
 
-struct GearLibraryView: View {
-    @Binding var owned: OwnedGears
-    @Environment(\.dismiss) private var dismiss
+struct OwnedGearsComparisonView: View {
+    let ownedSuggestions: [GearSuggestion]
+    let targetSpeed: Double
+    let cadence: Double
+    let displayKmh: Bool
+    let requiredInches: Double
+
+    private var speedUnit: String { displayKmh ? "km/h" : "mph" }
+
+    private func achievedSpeed(_ s: GearSuggestion) -> Double {
+        displayKmh ? s.achievedSpeedMph * 1.60934 : s.achievedSpeedMph
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(spacing: 6) {
+                    Text(String(format: "%.1f\"", requiredInches))
+                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                        .monospacedDigit()
+                    Text(String(format: "gear inches needed for %.1f %@ at %.0f rpm",
+                                targetSpeed, speedUnit, cadence))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+
+            Section {
+                if ownedSuggestions.isEmpty {
+                    Text("Add both chainrings and cogs in the My Gears tab to see buildable combos.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(ownedSuggestions) { s in
+                        GearSuggestionRow(
+                            suggestion: s,
+                            achievedSpeed: achievedSpeed(s),
+                            targetSpeed: targetSpeed,
+                            speedUnit: speedUnit
+                        )
+                    }
+                }
+            } header: {
+                Text("Best combos you can build")
+            }
+        }
+        .contentMargins(.bottom, 90, for: .scrollContent)
+        .navigationTitle("From Your Gears")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - My Gears Tab
+
+struct MyGearsView: View {
+    @EnvironmentObject var store: GearStore
 
     private let ringRange = Array(26...62)
     private let cogRange = Array(12...24)
     private let columns = [GridItem(.adaptive(minimum: 52), spacing: 8)]
+
+    private var owned: Binding<OwnedGears> {
+        Binding(
+            get: { store.ownedGears },
+            set: { store.saveOwnedGears($0) }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -902,30 +924,26 @@ struct GearLibraryView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Chainrings (\(owned.chainrings.count))") {
-                    toothGrid(teeth: ringRange, selection: $owned.chainrings)
+                Section("Chainrings (\(store.ownedGears.chainrings.count))") {
+                    toothGrid(teeth: ringRange, selection: owned.chainrings)
                 }
 
-                Section("Cogs (\(owned.cogs.count))") {
-                    toothGrid(teeth: cogRange, selection: $owned.cogs)
+                Section("Cogs (\(store.ownedGears.cogs.count))") {
+                    toothGrid(teeth: cogRange, selection: owned.cogs)
                 }
 
-                if !owned.isEmpty {
+                if !store.ownedGears.isEmpty {
                     Section {
                         Button("Clear all", role: .destructive) {
-                            owned = OwnedGears()
+                            store.saveOwnedGears(OwnedGears())
                         }
                         .frame(maxWidth: .infinity)
                     }
                 }
             }
-            .navigationTitle("My Gear Library")
+            .navigationTitle("My Gears")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .contentMargins(.bottom, 90, for: .scrollContent)
         }
     }
 

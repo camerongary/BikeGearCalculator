@@ -6,6 +6,7 @@ class GearStore: ObservableObject {
     @Published var savedConfigs: [SavedConfig] = []
     @Published var selectedTab: Int = 0
     @Published var pendingLoad: PendingLoad? = nil
+    @Published var ownedGears = OwnedGears()
 
     struct PendingLoad: Equatable {
         let config: SavedConfig
@@ -20,16 +21,20 @@ class GearStore: ObservableObject {
     private let riderKey = "riderSettings_v1"
     private let ownedKey = "ownedGears_v1"
 
-    init() { load() }
+    init() {
+        load()
+        ownedGears = loadOwnedGears()
+    }
 
     // MARK: - Owned gears persistence
 
     func saveOwnedGears(_ gears: OwnedGears) {
+        ownedGears = gears
         guard let data = try? JSONEncoder().encode(gears) else { return }
         UserDefaults.standard.set(data, forKey: ownedKey)
     }
 
-    func loadOwnedGears() -> OwnedGears {
+    private func loadOwnedGears() -> OwnedGears {
         guard let data = UserDefaults.standard.data(forKey: ownedKey),
               let gears = try? JSONDecoder().decode(OwnedGears.self, from: data)
         else { return OwnedGears() }
