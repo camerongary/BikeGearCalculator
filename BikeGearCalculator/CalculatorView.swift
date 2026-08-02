@@ -1167,6 +1167,14 @@ struct FixedCompareChartSection: View {
                     .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.monotone)
                 }
+                .chartXScale(domain: 50...130)
+                .chartXAxis {
+                    AxisMarks(values: Array(stride(from: 50.0, through: 130.0, by: 10.0))) { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel()
+                    }
+                }
                 .chartXAxisLabel("Cadence (rpm)")
                 .chartYAxisLabel(speedUnit)
                 .chartLegend(position: .topLeading)
@@ -1256,9 +1264,9 @@ struct CadenceCell: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 2) {
-            Text("\(Int(rpm))")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            Text("\(Int(rpm)) rpm")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
             Text(String(format: "%.1f %@", speed, speedUnit))
                 .font(.footnote)
                 .monospacedDigit()
