@@ -644,7 +644,7 @@ struct ResultsView: View {
                 HStack {
                     Text("\(combos.count) combos")
                     Spacer()
-                    Text("80 / 90 / 100 rpm")
+                    Text(bikeType == .fixed ? "60 / 80 / 110 rpm" : "80 / 90 / 100 rpm")
                         .font(.caption2)
                 }
             }
@@ -982,7 +982,9 @@ struct GearComboRow: View {
     let settings: RiderSettings
     let bikeType: BikeType
 
-    private let cadences: [Double] = [80, 90, 100]
+    private var cadences: [Double] {
+        bikeType == .fixed ? [60, 80, 110] : [80, 90, 100]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

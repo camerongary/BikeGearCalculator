@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="Bike Gear Calculator icon">
+</p>
+
 # Bike Gear Calculator
 
 An iOS app for calculating and comparing bicycle gear ratios across road, mountain, and fixed gear drivetrains.
